@@ -48,6 +48,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 class DashDownloader extends Thread {
+	private final String TAG = this.getClass().getSimpleName();
+
 	final int MAX_CONCURRENT_DOWNLOADS = 2;
 	final int MAX_DOWNLOAD_ATTEMPTS = 5;
 	final int MAX_SEGMENT_DOWNLOAD_TIMEOUT = 20000;
@@ -79,6 +81,7 @@ class DashDownloader extends Thread {
 	protected String errorMessage;
     
 	public DashDownloader (DownloadItem parent) {
+		Log.d(TAG, "DashDownloader() A: ");
 		this.chunkMemory = new HashMap<>();
 		this.currentIndexMap = new HashMap<>();
 		this.pendingWriters = new ArrayList<>();
@@ -87,6 +90,7 @@ class DashDownloader extends Thread {
     }
 
 	public DashDownloader(DashDownloader other) {
+		Log.d(TAG, "DashDownloader() B: ");
 		this.chunkMemory = new HashMap<>();
 		this.currentIndexMap = new HashMap<>();
 		this.pendingWriters = new ArrayList<>();

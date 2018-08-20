@@ -5,6 +5,12 @@ import android.net.Uri;
 import android.util.Log;
 import android.util.Pair;
 
+import com.google.android.exoplayer2.offline.Downloader;
+import com.google.android.exoplayer2.offline.DownloaderConstructorHelper;
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory;
+import com.google.android.exoplayer2.upstream.cache.NoOpCacheEvictor;
+import com.google.android.exoplayer2.upstream.cache.SimpleCache;
+
 import net.ericsson.emovs.download.drm.WidevineDownloadLicenseManager;
 import net.ericsson.emovs.exposure.auth.SharedPropertiesICredentialsStorage;
 import net.ericsson.emovs.exposure.entitlements.EMPEntitlementProvider;
@@ -28,6 +34,7 @@ import net.ericsson.emovs.utilities.emp.EMPRegistry;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.UUID;
 
 /**
@@ -160,10 +167,18 @@ public class DownloadItem implements IDownload {
 
                 FileSerializer.writeJson(entitlement, self.downloadPath + "/entitlement.ser");
 
+                Log.d(TAG, "Entitlement: " + entitlement);
                 Log.d(TAG, "Locator: " + entitlement.mediaLocator);
+                Log.d(TAG, "PlayToken: " + entitlement.playToken);
 
+                Log.d(TAG, "Current Thread A: "
+                        + Thread.currentThread().getName() + " , " + Thread.currentThread().getId());
                 downloadLicense(assetId, entitlement.mediaLocator, entitlement.playToken);
+                Log.d(TAG, "Current Thread B: "
+                        + Thread.currentThread().getName() + " , " + Thread.currentThread().getId());
                 downloadMedia(self.downloadPath, entitlement, callback);
+                Log.d(TAG, "Current Thread C: "
+                        + Thread.currentThread().getName() + " , " + Thread.currentThread().getId());
                 createDownloadedAsset(self.downloadPath + "/manifest_local.mpd");
             }
         };
@@ -229,9 +244,61 @@ public class DownloadItem implements IDownload {
         }
         this.downloaderWorker.init(entitlement.mediaLocator, downloadFolder, this.properties);
         if (callback != null) {
+            Log.d(TAG, "downloadMedia.setCallback()");
             this.downloaderWorker.setCallback("SINGLE_DOWNLOAD_ACTIVITY_CALLBACK", callback);
         }
         this.downloaderWorker.start();
+
+        // ----- TESTING -----
+//        com.google.android.exoplayer2.source.dash.offline.DashDownloader dashDownloader =
+//                createDashDownloader(downloadFolder, entitlement.mediaLocator);
+//
+//        dashDownloader.selectRepresentations(null);
+//
+//        try {
+//            dashDownloader.download(createProgressListener(downloadFolder, callback));
+//        } catch (Exception exception) {
+//            Log.e(TAG, "Error when downloading the Dash VOD.");
+//        }
+    }
+
+    private com.google.android.exoplayer2.source.dash.offline.DashDownloader createDashDownloader(
+            String downloadDirPath, String manifestUrl) {
+        File downloadDir = new File(downloadDirPath);
+
+        SimpleCache cache = new SimpleCache(downloadDir, new NoOpCacheEvictor());
+
+        DefaultHttpDataSourceFactory httpDataSourceFactory =
+                new DefaultHttpDataSourceFactory("EMP-Player", null);
+
+        DownloaderConstructorHelper helper =
+                new DownloaderConstructorHelper(cache, httpDataSourceFactory);
+
+        Uri manifestUri = Uri.parse(manifestUrl);
+
+        return new com.google.android.exoplayer2.source.dash.offline.DashDownloader(manifestUri,
+                                                                                    helper);
+    }
+
+    private Downloader.ProgressListener createProgressListener(final String downloadDirPath,
+                                                               final IDownloadEventListener callback) {
+        return new Downloader.ProgressListener() {
+            @Override
+            public void onDownloadProgress(Downloader downloader, float downloadPercentage,
+                                           long downloadedBytes) {
+                Log.d(TAG, "Downloaded " + downloadPercentage + " %: " + downloadedBytes);
+
+                if (downloadPercentage >= 100.0f) {
+                    Log.d(TAG, "Finished downloading Dash VOD.");
+
+                    onDownloadSuccess(downloadDirPath + "/manifest_local.mpd");
+
+                    if (callback != null) {
+                        callback.onSuccess();
+                    }
+                }
+            }
+        };
     }
 
     public void setDownloadedAsset(EmpOfflineAsset offlinePlayable) {
